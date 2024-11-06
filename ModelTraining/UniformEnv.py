@@ -1,28 +1,28 @@
 
 import gymnasium as gym
 from PythonAPI.LLM2CarlaScenario.Wrappers.wrappers import *
-from PythonAPI.LLM2CarlaScenario.State.TrafficDefines import *
+from PythonAPI.LLM2CarlaScenario.State.TrafficDefines import VehicleActionSpace,VehicleStateSpace
+
 
 class UniformVehicleEnv(gym.Env):
     vehicle: Vehicle
     client: carla.Client
     world: carla.World
-    vehicle_state: UnifiedState
-    vehicle_action: UnifiedAction
+    vehicle_state: VehicleStateSpace
+    vehicle_action: VehicleActionSpace
     action_smoothing: float
 
     def __init__(self, vehicle, client, vehicle_state, vehicle_action, action_smoothing):
         self.vehicle = vehicle
         self.client = client
-        self.vehicle_state = vehicle_state
-        self.vehicle_action = vehicle_action
+        self.vehicle_state = VehicleStateSpace.defaultVehicleState() if vehicle_state is None else vehicle_state
+        self.vehicle_action = VehicleActionSpace.defaultVehicleAction() if vehicle_action is None else vehicle_action
         self.action_smoothing = action_smoothing
-
-        self.action_space = gym.spaces.Box(low=self.vehicle_action.action_lower_bound,
-                                           high=self.vehicle_action.action_upper_bound,
+        self.action_space = gym.spaces.Box(low=self.vehicle_action.space_lower_bound,
+                                           high=self.vehicle_action.space_upper_bound,
                                            dtype=np.float32)
-        self.observation_space = gym.spaces.Box(low=self.vehicle_state.state_lower_bound,
-                                                high=self.vehicle_state.state_upper_bound,
+        self.observation_space = gym.spaces.Box(low=self.vehicle_state.space_lower_bound,
+                                                high=self.vehicle_state.space_upper_bound,
                                                 dtype=np.float32)
 
     def step(self, action):
@@ -41,35 +41,9 @@ class UniformVehicleEnv(gym.Env):
             done = False
         return new_state, 0, done, False, {}
 
+    def reset(self, seed= None, options = None):
 
-class UniformPedestrianEnv(gym.Env):
-    walker: carla.Walker
-    client: carla.Client
-    world: carla.World
-    pedestrian_state: UnifiedState
-    pedestrian_action: UnifiedAction
-
-    def __init__(self, walker, client, world, pedestrian_state, pedestrian_action):
-        self.walker = walker
-        self.client = client
-        self.world = world
-        self.pedestrian_state = pedestrian_state
-        self.pedestrian_action = pedestrian_action
-
-        self.action_space = gym.spaces.Box(high=self.pedestrian_action.action_upper_bound,
-                                           low=self.pedestrian_action.action_lower_bound,
-                                           dtype=np.float32)
-        self.observation_space = gym.spaces.Box(high=self.pedestrian_state.state_upper_bound,
-                                                low=self.pedestrian_state.state_lower_bound,
-                                                dtype=np.float32)
-
-    def step(self, action):
-        if action is not None:
-            u1, d1 = action[0], action[1]
-
-
-        return
-
+        return self.vehicle.get_state(), {}
 
 
 
