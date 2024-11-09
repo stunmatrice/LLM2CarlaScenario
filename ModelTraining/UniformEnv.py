@@ -30,20 +30,25 @@ class UniformVehicleEnv(gym.Env):
             u1, d1 = action[0], action[1]
             u2, d2 = action[2], action[3]
             u3, d3 = action[4], action[5]
+
             steer = np.random.normal(loc=u1, scale=np.sqrt(d1))
             throttle = np.random.normal(loc=u2, scale=np.sqrt(d2))
             brake = np.random.normal(loc=u3, scale=np.sqrt(d2))
+            # print(steer, throttle, brake)
             self.vehicle.control.steer = steer
             self.vehicle.control.throttle = throttle
-            self.vehicle.control.brake = brake
+            # self.vehicle.control.brake = brake
             self.vehicle.tick()
-            new_state = self.vehicle.get_state()
-            done = False
+            self.vehicle.world.tick()
+            new_state = self.vehicle.get_state_v2()
+
+            done = self.vehicle.should_done
         return new_state, 0, done, False, {}
 
     def reset(self, seed= None, options = None):
-
-        return self.vehicle.get_state(), {}
+        print('reset')
+        self.vehicle.reset_position()
+        return self.vehicle.get_state_v2(), {}
 
 
 

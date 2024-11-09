@@ -196,6 +196,8 @@ class Camera(CarlaActorBase):
 # ===============================================================================
 
 class Vehicle(CarlaActorBase):
+    should_done: bool = False
+
     def __init__(self, world, transform=carla.Transform(),
                  on_collision_fn=None, on_invasion_fn=None,
                  vehicle_type="vehicle.lincoln.mkz"):
@@ -249,6 +251,7 @@ class Vehicle(CarlaActorBase):
         # self.control.throttle = 0.0  # 设置油门为0
         # self.control.brake = 1.0  # 设置刹车为1，确保车辆完全停止
         # self.tick()
+        self.should_done = False
         self.world.tick()
         #print(self.get_speed())
 
@@ -281,6 +284,33 @@ class Vehicle(CarlaActorBase):
         dps.insert(1, d.y)
         dps.insert(2, speed)
         return np.array(dps, dtype=np.float32)
+
+    def get_state_v2(self):
+        velocity = self.actor.get_velocity()
+        wp: carla.Waypoint = self.get_closest_waypoint()
+        # Always get waypoint -1 or 1 as the relative coordinate origin
+        lane_id = wp.lane_id
+        if lane_id == 2 or lane_id == -2:
+            wp = wp.get_left_lane()
+
+        vehicle_transform = self.actor.get_transform()
+        s, l = self.get_s_l_coordinate(wp, vehicle_transform)
+
+        # print(l)
+
+
+        speed = self.get_speed()
+
+        return np.zeros(22)
+
+
+    @staticmethod
+    def get_s_l_coordinate(waypoint:carla.Waypoint, vehicle_transform:carla.Transform):
+        delta: carla.Location = vehicle_transform.location - waypoint.transform.location
+        wp_direction = waypoint.transform.get_forward_vector()
+        s_vector = delta.dot(wp_direction) * wp_direction
+        l_vector = delta - s_vector
+        return s_vector, l_vector
 
     def get_dot_product_group(self):
         wp = self.get_closest_waypoint()
@@ -327,7 +357,7 @@ class World():
         return getattr(self.world, name)
 
 
-    def find_nearby_vehicles(self, ego):
+    def find_nearby_vehicles(self, ego, distance=20):
         res = []
         for actor in self.actor_list:
             if isinstance(actor, Vehicle) and actor is not ego:
@@ -338,6 +368,6 @@ class World():
                 forward = actor.get_transform().get_forward_vector()
                 delta = location2 - location1
                 dot = forward.x * delta.x + forward.y * delta.y + forward.z * delta.z
-                if dis < 50 and dot > 0:
+                if dis < dis and dot > 0:
                     res.append(actor)
         return res

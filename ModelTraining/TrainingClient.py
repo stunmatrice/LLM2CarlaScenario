@@ -4,6 +4,9 @@ from PythonAPI.LLM2CarlaScenario.Wrappers.wrappers import *
 from PythonAPI.LLM2CarlaScenario.State.BehaviorDefines import *
 from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import CheckpointCallback
+import signal
+
+from stable_baselines3.common.buffers import RolloutBuffer
 
 class TrainingParameters:
     learning_rate = 0.01
@@ -18,16 +21,48 @@ class TrainingParameters:
     vf_coef = 0.5
     max_grad_norm = 0.5
     total_timesteps = 1000000
+    def __init__(self):
+        self.learning_rate = 0.01
+        self.verbose = 0
+        self.n_steps = 2048
+        self.batch_size = 64
+        self.n_epochs = 10
+        self.gamma = 0.99
+        self.gae_lamda = 0.95
+        self.clip_range = 0.2
+        self.ent_coef = 0.0
+        self.vf_coef = 0.5
+        self.max_grad_norm = 0.5
+        self.total_timesteps = 1000000
 
 
 class TrainingCallBack(CheckpointCallback):
-    def __init__(self, save_freq=20000, save_path='../models'):
+    def __init__(self, save_freq=20000, save_path='../models', training_client=None, behavior=None):
         super(TrainingCallBack, self).__init__(save_freq=save_freq, save_path=save_path)
+        self.training_client = training_client
+        self.behavior = behavior
+    def _on_step(self) -> bool:
+        # self.training_client.world.tick()
+        self.training_client.spectator_look_at()
+        return True
 
+    # dict_keys(['self', 'total_timesteps', 'callback', 'log_interval', 'tb_log_name', 'reset_num_timesteps', 'progress_bar', 'iteration', 'env', 'rollout_buffer', 'n_rollout_steps', 'n_steps', 'obs_tensor', 'actions', 'values', 'log_probs', 'clipped_actions', 'new_obs', 'rewards', 'dones', 'infos', 'idx', 'done']
     def _on_rollout_end(self) -> None:
-        obs = self.locals['obs']
-        print(type(obs))
-        print(len(obs))
+        rewards = self.locals['rewards']
+
+        # print(self.locals.keys())
+        print(self.globals.keys())
+        print(type(rewards))
+        print(rewards.size)
+        rb:RolloutBuffer = self.locals['rollout_buffer']
+        print(rb.rewards.shape)
+        rb.rewards.fill(0)
+        ## 1 Get reference of state data and the behaviors prompt here
+        ## 2 Sent key frames of state data, let LLM decide where the curve is good
+        ##
+        behavior:VehicleBehaviorBase = self.behavior
+        prompt = behavior.BehaviorPrompt
+        print(rb.observations.shape)
 
 
 
@@ -44,10 +79,20 @@ class TrainingClient:
     training_behavior: VehicleBehaviorBase
 
     def __init__(self, host="127.0.0.1", port=2000, training_parameter=None, training_behavior=None):
+
+
         try:
             self.client = carla.Client(host, port)
             self.world = World(self.client)
-            self.ego_vehicle = Vehicle(self.world, self.world.map.get_spawn_points()[12])
+
+            settings = self.world.get_settings()
+            settings.synchronous_mode = True
+            settings.fixed_delta_seconds = 1 / 60
+            self.world.apply_settings(settings)
+
+            self.ego_vehicle = Vehicle(world=self.world,
+                                       transform=self.world.map.get_spawn_points()[3],
+                                       on_collision_fn=self._on_collision_fn)
             self.vehicle_evn = UniformVehicleEnv(vehicle=self.ego_vehicle,
                                                  client=self.client,
                                                  vehicle_state=None,
@@ -56,8 +101,12 @@ class TrainingClient:
             self.training_parameters = training_parameter
             self.model_ = PPO('MlpPolicy', env=self.vehicle_evn)
             self.training_behavior = training_behavior
-            self.training_callback = TrainingCallBack(save_freq=20000, save_path=f'../models/{self.training_behavior.BehaviorName}')
+            self.training_callback = TrainingCallBack(save_freq=20000,
+                                                      save_path=f'../models/{self.training_behavior.BehaviorName}',
+                                                      training_client=self,
+                                                      behavior=self.training_behavior)
 
+            signal.signal(signal.SIGINT, self.handle_mannual_exit)
         except Exception as e:
             if self.world is not None:
                 print("error1")
@@ -65,6 +114,9 @@ class TrainingClient:
             raise e
         finally:
             print("fin")
+            # if self.world is not None:
+            #     print("error1")
+            #     self.world.destroy()
 
     def run(self):
         while True:
@@ -74,7 +126,6 @@ class TrainingClient:
     def training(self):
         self.model_.learn(total_timesteps=self.training_parameters.total_timesteps, callback=self.training_callback)
 
-
     def spectator_look_at(self):
         spectator = self.world.get_spectator()
         transform = self.ego_vehicle.actor.get_transform()
@@ -83,9 +134,20 @@ class TrainingClient:
             transform.rotation)
         spectator.set_transform(new_transform)
 
+    def handle_mannual_exit(self, signum, frame):
+        if self.world is not None:
+            self.world.destroy()
+
+    def _on_collision_fn(self, event):
+        self.ego_vehicle.should_done = True
+
+
 
 if __name__ == "__main__":
     training_parameters = TrainingParameters()
     b_lane_keeping = VehicleBehaviorLaneKeeping.default_behavior()
-    training_client = TrainingClient(host='127.0.0.1', port=2000, training_behavior=b_lane_keeping)
+    training_client = TrainingClient(host='127.0.0.1',
+                                     port=2000,
+                                     training_parameter=training_parameters,
+                                     training_behavior=b_lane_keeping)
     training_client.training()

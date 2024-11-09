@@ -18,9 +18,9 @@ class UnifiedSpaceDefine:
     def parseFormArray(self, des_array):
         dim = len(des_array)
         lower_bound = [row[0] for row in des_array]
-        lower_bound_np = np.array(lower_bound)
+        lower_bound_np = np.array(lower_bound, dtype=np.float32)
         upper_bound = [row[1] for row in des_array]
-        upper_bound_np = np.array(upper_bound)
+        upper_bound_np = np.array(upper_bound, dtype=np.float32)
         des_strs = [row[2] for row in des_array]
         self.space_dim = dim
         self.space_lower_bound = lower_bound_np
@@ -70,9 +70,12 @@ class VehicleStateSpace(UnifiedSpaceDefine):
 class VehicleActionSpace(UnifiedSpaceDefine):
     @classmethod
     def defaultVehicleAction(cls):
-        des = [[-1, 1, 'steer'],
-               [0,  1, 'throttle'],
-               [0,  1, 'brake']]
+        des = [[-1, 1, 'steer u'],
+               [0,  1, 'steer d'],
+               [0,  1, 'throttle u'],
+               [0,  1, 'throttle d'],
+               [0,  1, 'brake u'],
+               [0,  1, 'brake d']]
         vehicle_action_space = VehicleActionSpace()
         vehicle_action_space.parseFormArray(des)
         return vehicle_action_space
