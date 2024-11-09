@@ -20,6 +20,10 @@ def print_transform(transform):
     )
 
 
+def get_vector_len(v: carla.Vector3D):
+    return np.sqrt(v.x**2 + v.y**2 + v.z**2)
+
+
 def get_actor_display_name(actor, truncate=250):
     name = " ".join(actor.type_id.replace("_", ".").title().split(".")[1:])
     return (name[:truncate - 1] + u"\u2026") if len(name) > truncate else name
@@ -197,6 +201,7 @@ class Camera(CarlaActorBase):
 
 class Vehicle(CarlaActorBase):
     should_done: bool = False
+    ego_state: np.ndarray
 
     def __init__(self, world, transform=carla.Transform(),
                  on_collision_fn=None, on_invasion_fn=None,
@@ -219,6 +224,8 @@ class Vehicle(CarlaActorBase):
         # Maintain vehicle control
         self.control = carla.VehicleControl()
         self.spawn_point = transform
+        self.ego_state = np.zeros(32, dtype=np.float32)
+
         if callable(on_collision_fn):
             self.collision_sensor = CollisionSensor(world, self, on_collision_fn=on_collision_fn)
         if callable(on_invasion_fn):
@@ -268,7 +275,7 @@ class Vehicle(CarlaActorBase):
         vehicle_direction = vehicle_transform.get_forward_vector()
         d = vehicle_transform.location - wp.transform.location
         speed = self.get_speed()
-        #print(speed)
+        # print(speed)
         wps = [wp]
         c_wp = wp
         for i in range(10):
@@ -286,31 +293,80 @@ class Vehicle(CarlaActorBase):
         return np.array(dps, dtype=np.float32)
 
     def get_state_v2(self):
-        velocity = self.actor.get_velocity()
-        wp: carla.Waypoint = self.get_closest_waypoint()
+        self.ego_state.fill(0.0)
+
+        wp0: carla.Waypoint = self.get_closest_waypoint()
         # Always get waypoint -1 or 1 as the relative coordinate origin
-        lane_id = wp.lane_id
+        lane_id = wp0.lane_id
+        wp_origin = None
         if lane_id == 2 or lane_id == -2:
-            wp = wp.get_left_lane()
-
-        vehicle_transform = self.actor.get_transform()
-        s, l = self.get_s_l_coordinate(wp, vehicle_transform)
-
-        # print(l)
+            wp_origin = wp0.get_left_lane()
+        if lane_id == 1 or lane_id == -1:
+            wp_origin = wp0
 
 
-        speed = self.get_speed()
+        # 0-11 ----------------------------------------------
+        wp_ite = wp0
+        wp_next_5 = [wp0]
+        for wp_index in range(5):
+            wp_next = wp_ite.next(4)[0]
+            wp_next_5.append(wp_next)
+            wp_ite = wp_next
+        wp_next_5_coordinate = []
+        for wp_i in wp_next_5:
+            x, y = self.get_s_l_coordinate(wp_origin, wp_i.transform)
+            wp_next_5_coordinate.append(x)
+            wp_next_5_coordinate.append(y)
+        for i in range(len(wp_next_5_coordinate)):
+            self.ego_state[i] = wp_next_5_coordinate[i]
 
-        return np.zeros(22)
-
+        vehicles = self.world.find_nearby_vehicles(self)
+        vehicles.insert(0, self)
+        for index, vehicle in vehicles:
+        # 12-21 ----------------------------------------------
+            vehicle_transform = vehicle.actor.get_transform()
+            x, y = self.get_s_l_coordinate(wp_origin, vehicle_transform)
+            self.ego_state[12 + index*2] = x
+            self.ego_state[12 + index*2 + 1] = y
+        # 22-31 ----------------------------------------------
+            vehicle_velocity = vehicle.actor.get_velocity()
+            vx, vy = self.get_velocity_x_y(wp_origin, vehicle_velocity)
+            self.ego_state[22 + index*2] = vx
+            self.ego_state[22 + index*2 + 1] = vy
+        return self.ego_state
 
     @staticmethod
-    def get_s_l_coordinate(waypoint:carla.Waypoint, vehicle_transform:carla.Transform):
+    def get_s_l_coordinate(waypoint: carla.Waypoint, vehicle_transform: carla.Transform):
         delta: carla.Location = vehicle_transform.location - waypoint.transform.location
         wp_direction = waypoint.transform.get_forward_vector()
         s_vector = delta.dot(wp_direction) * wp_direction
+        s_len = get_vector_len(s_vector)
         l_vector = delta - s_vector
-        return s_vector, l_vector
+        l_len = get_vector_len(l_vector)
+        x_dot_product = l_vector.dot(waypoint.transform.get_right_vector())
+        y_dot_product = s_vector.dot(wp_direction)
+        x = l_len if x_dot_product > 0 else -l_len
+        y = s_len if y_dot_product > 0 else -s_len
+        return x, y
+
+    @staticmethod
+    def get_velocity_x_y(waypoint: carla.Waypoint, vehicle_velocity: carla.Vector3D):
+        wp_forward = waypoint.transform.get_forward_vector()
+        wp_right = waypoint.transform.get_right_vector()
+        v_forward = wp_forward.dot(vehicle_velocity) * wp_forward
+        v_right = wp_right.dot(vehicle_velocity) * wp_right
+        v_forward_len = get_vector_len(v_forward)
+        v_right_len = get_vector_len(v_right)
+        x_product = wp_right.dot(v_right)
+        y_product = wp_forward.dot(v_forward)
+        vx = v_right_len if x_product > 0 else -v_right_len
+        vy = v_forward_len if y_product > 0 else -v_forward_len
+        return vx, vy
+
+
+
+
+
 
     def get_dot_product_group(self):
         wp = self.get_closest_waypoint()
@@ -368,6 +424,6 @@ class World():
                 forward = actor.get_transform().get_forward_vector()
                 delta = location2 - location1
                 dot = forward.x * delta.x + forward.y * delta.y + forward.z * delta.z
-                if dis < dis and dot > 0:
+                if dis < distance and dot > 0:
                     res.append(actor)
         return res

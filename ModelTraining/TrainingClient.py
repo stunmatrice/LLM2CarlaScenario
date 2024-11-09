@@ -91,8 +91,12 @@ class TrainingClient:
             self.world.apply_settings(settings)
 
             self.ego_vehicle = Vehicle(world=self.world,
-                                       transform=self.world.map.get_spawn_points()[3],
+                                       transform=self.world.map.get_spawn_points()[1],
                                        on_collision_fn=self._on_collision_fn)
+
+            # self.npc1 = Vehicle(world=self.world,
+            #                     transform=self.world.map.get_spawn_points()[28])
+
             self.vehicle_evn = UniformVehicleEnv(vehicle=self.ego_vehicle,
                                                  client=self.client,
                                                  vehicle_state=None,

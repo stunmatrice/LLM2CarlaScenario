@@ -62,8 +62,46 @@ class VehicleStateSpace(UnifiedSpaceDefine):
                [-20, 20, 'Npc 3 velocity y'],
                [-10, 60, 'Npc 4 velocity x'],
                [-20, 20, 'Npc 4 velocity y']]
+
+        des_v2 = [
+            # Ego's point and next 5 points
+            [-50, 50, 'Ego vehicle waypoint\'s x coordinate'],
+            [-50, 50, 'Ego vehicle waypoint\'s y coordinate'],
+            [-50, 50, 'Next waypoint 1\'s x coordinate'],
+            [-50, 50, 'Next waypoint 1\'s y coordinate'],
+            [-50, 50, 'Next waypoint 2\'s x coordinate'],
+            [-50, 50, 'Next waypoint 2\'s y coordinate'],
+            [-50, 50, 'Next waypoint 3\'s x coordinate'],
+            [-50, 50, 'Next waypoint 3\'s y coordinate'],
+            [-50, 50, 'Next waypoint 4\'s x coordinate'],
+            [-50, 50, 'Next waypoint 4\'s y coordinate'],
+            [-50, 50, 'Next waypoint 5\'s x coordinate'],
+            [-50, 50, 'Next waypoint 5\'s y coordinate'],
+            # 4 Npc 's positions
+            [-50, 50, 'Ego vehicle\'s x coordinate'],
+            [-50, 50, 'Ego vehicle\'s y coordinate'],
+            [-50, 10, 'Npc 1 \'s x coordinate'],
+            [-20, 20, 'Npc 1 \'s y coordinate'],
+            [-50, 10, 'Npc 2 \'s x coordinate'],
+            [-20, 20, 'Npc 2 \'s y coordinate'],
+            [-50, 10, 'Npc 3 \'s x coordinate'],
+            [-20, 20, 'Npc 3 \'s y coordinate'],
+            [-50, 10, 'Npc 4 \'s x coordinate'],
+            [-20, 20, 'Npc 4 \'s y coordinate'],
+            # Ego's velocity and 4 npc's velocity
+            [-10, 60, 'Ego vehicle velocity x'],
+            [-20, 20, 'Ego vehicle velocity y'],
+            [-10, 60, 'Npc 1 velocity x'],
+            [-20, 20, 'Npc 1 velocity y'],
+            [-10, 60, 'Npc 2 velocity x'],
+            [-20, 20, 'Npc 2 velocity y'],
+            [-10, 60, 'Npc 3 velocity x'],
+            [-20, 20, 'Npc 3 velocity y'],
+            [-10, 60, 'Npc 4 velocity x'],
+            [-20, 20, 'Npc 4 velocity y']]
+
         vehicle_state_space = VehicleStateSpace()
-        vehicle_state_space.parseFormArray(des)
+        vehicle_state_space.parseFormArray(des_v2)
         return vehicle_state_space
 
 
