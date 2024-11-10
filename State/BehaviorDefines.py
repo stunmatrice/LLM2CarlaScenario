@@ -16,10 +16,13 @@ class VehicleBehaviorLaneKeeping(VehicleBehaviorBase):
     def default_behavior(cls):
         b_id = 1
         b_name = 'LaneKeeping'
-        b_prompt = 'The ego vehicle keeps driving alone the lane, '
+        b_prompt = '''The ego vehicle keeps driving alone the lane, 
+                    If the x-coordinate of the ego vehicle remains at a fixed value, 
+                    it is considered that lane keeping is good. 
+                    Additionally, the ego vehicle should maintain a safe distance from the vehicle ahead. 
+                    If both conditions are met, give a reward of 1; 
+                    otherwise, give a reward of no more than 0.5.'''
         return VehicleBehaviorLaneKeeping(b_id, b_name, b_prompt)
-
-
 
 
 

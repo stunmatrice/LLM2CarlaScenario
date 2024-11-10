@@ -322,7 +322,7 @@ class Vehicle(CarlaActorBase):
 
         vehicles = self.world.find_nearby_vehicles(self)
         vehicles.insert(0, self)
-        for index, vehicle in vehicles:
+        for index, vehicle in enumerate(vehicles):
         # 12-21 ----------------------------------------------
             vehicle_transform = vehicle.actor.get_transform()
             x, y = self.get_s_l_coordinate(wp_origin, vehicle_transform)

@@ -1,3 +1,4 @@
+import numpy as np
 
 from UniformEnv import UniformVehicleEnv
 from PythonAPI.LLM2CarlaScenario.Wrappers.wrappers import *
@@ -7,11 +8,12 @@ from stable_baselines3.common.callbacks import CheckpointCallback
 import signal
 
 from stable_baselines3.common.buffers import RolloutBuffer
+from PythonAPI.LLM2CarlaScenario.LLMTools.LLMAutoReward import LLMAutoReward
 
 class TrainingParameters:
     learning_rate = 0.01
     verbose = 0
-    n_steps = 2048
+    n_steps = 1024
     batch_size = 64
     n_epochs = 10
     gamma = 0.99
@@ -21,6 +23,7 @@ class TrainingParameters:
     vf_coef = 0.5
     max_grad_norm = 0.5
     total_timesteps = 1000000
+
     def __init__(self):
         self.learning_rate = 0.01
         self.verbose = 0
@@ -41,6 +44,7 @@ class TrainingCallBack(CheckpointCallback):
         super(TrainingCallBack, self).__init__(save_freq=save_freq, save_path=save_path)
         self.training_client = training_client
         self.behavior = behavior
+
     def _on_step(self) -> bool:
         # self.training_client.world.tick()
         self.training_client.spectator_look_at()
@@ -57,15 +61,25 @@ class TrainingCallBack(CheckpointCallback):
         rb:RolloutBuffer = self.locals['rollout_buffer']
         print(rb.rewards.shape)
         rb.rewards.fill(0)
-        ## 1 Get reference of state data and the behaviors prompt here
-        ## 2 Sent key frames of state data, let LLM decide where the curve is good
+        # 1 Get reference of state data and the behaviors prompt here
+        # 2 Sent key frames of state data, let LLM decide where the curve is good
         ##
-        behavior:VehicleBehaviorBase = self.behavior
-        prompt = behavior.BehaviorPrompt
+        behavior: VehicleBehaviorBase = self.behavior
+        behavior_prompt = behavior.BehaviorPrompt
         print(rb.observations.shape)
 
+        obs = rb.observations[0::90, 0, :]
+        last = rb.observations[-1, 0, :]
+        data = np.vstack([obs, last])
+        data_2_str = np.array2string(data, precision=3, separator=',', suppress_small=True)
+        print(data.shape)
 
-
+        auto_reward = LLMAutoReward(system_prompt=LLMAutoReward.default_system_prompt(),
+                                    behavior_prompt=behavior_prompt,
+                                    data_prompt=data_2_str,
+                                    output_format_prompt=LLMAutoReward.default_output_format_prompt())
+        res = auto_reward.get_result()
+        print(res)
 
 
 class TrainingClient:
@@ -91,7 +105,7 @@ class TrainingClient:
             self.world.apply_settings(settings)
 
             self.ego_vehicle = Vehicle(world=self.world,
-                                       transform=self.world.map.get_spawn_points()[1],
+                                       transform=self.world.map.get_spawn_points()[7],
                                        on_collision_fn=self._on_collision_fn)
 
             # self.npc1 = Vehicle(world=self.world,
@@ -103,7 +117,9 @@ class TrainingClient:
                                                  vehicle_action=None,
                                                  action_smoothing=0.8)
             self.training_parameters = training_parameter
-            self.model_ = PPO('MlpPolicy', env=self.vehicle_evn)
+            self.model_ = PPO('MlpPolicy',
+                              env=self.vehicle_evn,
+                              n_steps=1024)
             self.training_behavior = training_behavior
             self.training_callback = TrainingCallBack(save_freq=20000,
                                                       save_path=f'../models/{self.training_behavior.BehaviorName}',
@@ -128,7 +144,8 @@ class TrainingClient:
             self.world.tick()
 
     def training(self):
-        self.model_.learn(total_timesteps=self.training_parameters.total_timesteps, callback=self.training_callback)
+        self.model_.learn(total_timesteps=self.training_parameters.total_timesteps,
+                          callback=self.training_callback)
 
     def spectator_look_at(self):
         spectator = self.world.get_spectator()
