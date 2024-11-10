@@ -32,7 +32,7 @@ class LLMAutoReward:
         parser = JsonOutputParser()
         chain = prompt | model | parser
         str = f'{self.default_system_prompt()}\n{self.behaviour_prompt}\n{self.data_prompt}\n{self.output_format_prompt}'
-        print(str)
+        # print(str)
         res = chain.invoke({"system_prompt": self.system_prompt,
                             "behaviour_prompt": self.behaviour_prompt,
                             "data_prompt": self.data_prompt,
