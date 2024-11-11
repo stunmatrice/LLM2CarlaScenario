@@ -40,7 +40,7 @@ class UniformVehicleEnv(gym.Env):
             # self.vehicle.control.brake = brake
             self.vehicle.tick()
             self.vehicle.world.tick()
-            new_state = self.vehicle.get_state_v2()
+            new_state = self.vehicle.get_state_v3()
 
             done = self.vehicle.should_done
         return new_state, 0, done, False, {}
@@ -48,7 +48,7 @@ class UniformVehicleEnv(gym.Env):
     def reset(self, seed= None, options = None):
         print('reset')
         self.vehicle.reset_position()
-        return self.vehicle.get_state_v2(), {}
+        return self.vehicle.get_state_v3(), {}
 
 
 

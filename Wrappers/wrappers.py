@@ -202,6 +202,7 @@ class Camera(CarlaActorBase):
 class Vehicle(CarlaActorBase):
     should_done: bool = False
     ego_state: np.ndarray
+    ego_state_v3: np.ndarray
 
     def __init__(self, world, transform=carla.Transform(),
                  on_collision_fn=None, on_invasion_fn=None,
@@ -225,6 +226,7 @@ class Vehicle(CarlaActorBase):
         self.control = carla.VehicleControl()
         self.spawn_point = transform
         self.ego_state = np.zeros(32, dtype=np.float32)
+        self.ego_state_v3 = np.zeros(13, dtype=np.float32)
 
         if callable(on_collision_fn):
             self.collision_sensor = CollisionSensor(world, self, on_collision_fn=on_collision_fn)
@@ -335,6 +337,50 @@ class Vehicle(CarlaActorBase):
             self.ego_state[22 + index*2 + 1] = vy
         return self.ego_state
 
+    def get_state_v3(self):
+        self.ego_state_v3.fill(0)
+
+        wp0: carla.Waypoint = self.get_closest_waypoint()
+        wp1: carla.Waypoint = wp0.next(2)[0]
+        vehicle_trans = self.actor.get_transform()
+        self.ego_state_v3[0] = self.get_lane_keeping_quality(wp0, wp1, vehicle_trans)
+
+        vehicles = self.world.find_nearby_vehicles(self)
+        vehicles.insert(0, self)
+        for index, vehicle in enumerate(vehicles):
+
+            wp_closest = vehicle.get_closest_waypoint()
+            wp_closest_origin = self.get_origin_waypoint(wp_closest)
+            l, s = self.get_s_l_coordinate(wp_closest_origin, vehicle.actor.get_transform())
+            if l < -10 or l > 10:
+                self.should_done = True
+            s = wp_closest.s - wp0.s
+            self.ego_state_v3[index*2+1] = l
+            self.ego_state_v3[index*2+2] = s
+            if index == 0:
+                l, s = self.get_s_l_coordinate(wp_closest, vehicle.actor.get_transform())
+                self.ego_state_v3[index * 2 + 2] = l
+
+            speed = vehicle.get_speed()
+            self.ego_state_v3[index + 9] = speed
+        return self.ego_state_v3
+
+
+    @staticmethod
+    def get_lane_keeping_quality(wp0: carla.Waypoint, wp1: carla.Waypoint, vehicle_trans: carla.Transform):
+        v1 = wp0.transform.get_forward_vector()
+        v2 = wp1.transform.get_forward_vector()
+        v3 = vehicle_trans.get_forward_vector()
+        return v1.dot(v3) + v2.dot(v3)
+
+    @staticmethod
+    def get_origin_waypoint(waypoint: carla.Waypoint):
+        lane_id = waypoint.lane_id
+        wp_origin = waypoint
+        if lane_id == 2 or lane_id == -2:
+            wp_origin = waypoint.get_left_lane()
+        return wp_origin
+
     @staticmethod
     def get_s_l_coordinate(waypoint: carla.Waypoint, vehicle_transform: carla.Transform):
         delta: carla.Location = vehicle_transform.location - waypoint.transform.location
@@ -362,11 +408,6 @@ class Vehicle(CarlaActorBase):
         vx = v_right_len if x_product > 0 else -v_right_len
         vy = v_forward_len if y_product > 0 else -v_forward_len
         return vx, vy
-
-
-
-
-
 
     def get_dot_product_group(self):
         wp = self.get_closest_waypoint()

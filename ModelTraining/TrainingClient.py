@@ -78,7 +78,7 @@ class TrainingCallBack(CheckpointCallback):
                                     data_prompt=data_2_str,
                                     output_format_prompt=LLMAutoReward.default_output_format_prompt())
         res = auto_reward.get_result()
-        print(type(res))
+        print(res)
 
         # Use the res as trajectory rewards
         indices = np.arange(0, 1024, 90)
@@ -86,12 +86,18 @@ class TrainingCallBack(CheckpointCallback):
 
         rb.rewards[indices, 0] = res[:len(indices)]
 
-        for i in range(len(indices)):
+        for i in range(len(indices) - 1):
             start_idx = indices[i]
             end_idx = indices[i + 1]
             start_val = rb.rewards[start_idx, 0]
             end_val = rb.rewards[end_idx, 0]
             rb.rewards[start_idx: end_idx, 0] = np.linspace(start_val, end_val, end_idx - start_idx)
+
+        start_idx = indices[-2]
+        end_idx = indices[-1]
+        start_val = rb.rewards[start_idx, 0]
+        end_val = rb.rewards[end_idx, 0]
+        rb.rewards[start_idx: end_idx, 0] = np.linspace(start_val, end_val, end_idx - start_idx)
 
 
 class TrainingClient:
@@ -117,7 +123,7 @@ class TrainingClient:
             self.world.apply_settings(settings)
 
             self.ego_vehicle = Vehicle(world=self.world,
-                                       transform=self.world.map.get_spawn_points()[0],
+                                       transform=self.world.map.get_spawn_points()[3],
                                        on_collision_fn=self._on_collision_fn)
 
             # self.npc1 = Vehicle(world=self.world,
@@ -173,7 +179,6 @@ class TrainingClient:
 
     def _on_collision_fn(self, event):
         self.ego_vehicle.should_done = True
-
 
 
 if __name__ == "__main__":
